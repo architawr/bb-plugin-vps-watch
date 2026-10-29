@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { collect, parse, type Sample } from './core';
 const configSchema=z.object({host:z.string().regex(/^$|^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/),enabled:z.boolean(),minutes:z.number().int().min(5).max(60)});
 type Config=z.infer<typeof configSchema>;
-const sampleSchema=z.object({at:z.number(),cpu:z.number().nullable(),memory:z.number(),disk:z.number(),inode:z.number(),uptime:z.number(),load:z.string(),total:z.number(),idle:z.number()});
+const sampleSchema=z.object({at:z.number(),cpu:z.number().nullable(),memory:z.number(),disk:z.number(),inode:z.number(),uptime:z.number(),load:z.string(),total:z.number(),idle:z.number(),memoryUsed:z.number().optional(),memoryTotal:z.number().optional(),diskUsed:z.number().optional(),diskTotal:z.number().optional(),diskAvailable:z.number().optional(),inodeUsed:z.number().optional(),inodeTotal:z.number().optional(),cores:z.number().optional()});
 const stateSchema=z.object({config:configSchema,samples:z.array(sampleSchema),error:z.string().nullable(),attempt:z.number().nullable(),busy:z.boolean()});
 export const rpcContract=defineRpcContract({status:{input:z.null(),output:stateSchema},configure:{input:configSchema,output:z.boolean()},refresh:{input:z.null(),output:stateSchema}});
 export default async function plugin(bb:BbPluginApi){

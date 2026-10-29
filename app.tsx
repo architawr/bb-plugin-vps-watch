@@ -1,0 +1,28 @@
+import {useEffect,useState} from 'react';
+import {definePluginApp,useRpc} from '@get-bb/plugin-sdk/app';
+import type {rpcContract} from './server';
+import type {Sample} from './core';
+function Page(){
+ const rpc=useRpc<typeof rpcContract>();
+ const [data,setData]=useState<{samples:Sample[];config:{host:string;enabled:boolean;minutes:number};error:string|null;attempt:number|null;busy:boolean}|null>(null);
+ const [host,setHost]=useState(''),[minutes,setMinutes]=useState(5),[enabled,setEnabled]=useState(false),[error,setError]=useState(''),[pending,setPending]=useState(false),[now,setNow]=useState(Date.now());
+ useEffect(()=>{let live=true;const read=async()=>{try{const s=await rpc.call('status');if(live){setData(s);setNow(Date.now());}}catch(e){if(live)setError(String(e));}};rpc.call('status').then(s=>{if(live){setData(s);setHost(s.config.host);setMinutes(s.config.minutes);setEnabled(s.config.enabled);}},e=>{if(live)setError(String(e));});const timer=setInterval(read,15000);return()=>{live=false;clearInterval(timer);};},[rpc]);
+ const latest=data?.samples.at(-1);const stale=!!latest&&now-latest.at>Math.max(600000,(data?.config.minutes??5)*120000);
+ const act=async(save:boolean)=>{setPending(true);setError('');try{if(save)await rpc.call('configure',{host,minutes,enabled});setData(await rpc.call('refresh'));setNow(Date.now());}catch(e){setError(String(e));}finally{setPending(false);}};
+ const pct=(n:number|undefined|null)=>n==null?'—':n.toFixed(1)+'%';
+ const metric=(name:string,value:string,n?:number|null)=><div className="rounded-lg border border-border p-4"><div className="text-xs text-muted-foreground">{name}</div><div className="my-2 text-2xl font-semibold">{value}</div>{n!=null&&<div className="h-1 rounded bg-muted"><div className="h-1 rounded bg-primary" style={{width:Math.max(0,Math.min(100,n))+'%'}}/></div>}</div>;
+ return <div className="h-full overflow-y-auto"><main className="mx-auto max-w-3xl p-5 space-y-5">
+ <header><h1 className="text-xl font-semibold">VPS Watch · Lite</h1><p className="text-sm text-muted-foreground">Один SSH-запрос каждые {data?.config.minutes??5} мин. Без агента на сервере.</p></header>
+ <form className="rounded-lg border border-border p-4 space-y-3" onSubmit={e=>{e.preventDefault();void act(true);}}>
+ <label className="block text-sm">SSH alias<input className="mt-1 block w-full rounded border border-border bg-background p-2" placeholder="personal-vps" value={host} pattern="[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}" onChange={e=>setHost(e.target.value)} required/></label>
+ <div className="flex flex-wrap items-center gap-4"><label className="text-sm">Интервал <select className="rounded border border-border bg-background p-2" value={minutes} onChange={e=>setMinutes(Number(e.target.value))}>{[5,10,15,30,60].map(n=><option key={n} value={n}>{n} мин</option>)}</select></label><label className="text-sm"><input type="checkbox" checked={enabled} onChange={e=>setEnabled(e.target.checked)}/> Мониторинг включён</label><button disabled={pending} className="rounded border border-border px-3 py-2 disabled:opacity-50">Сохранить</button></div>
+ <p className="text-xs text-muted-foreground">Используется SSH-конфигурация компьютера, где работает BB. Сначала подключитесь к alias обычным SSH, чтобы проверить ключ сервера.</p></form>
+ {(error||data?.error)&&<p role="alert" className="text-sm text-destructive">{error||data?.error}</p>}
+ <div className="flex flex-wrap justify-between gap-2 text-sm"><span>{!data?'Загрузка…':!data.config.enabled?'На паузе':data.busy?'Проверка…':data.error?'Ошибка подключения':stale?'Данные устарели':latest?'Есть данные':'Ожидание первого замера'}</span><button disabled={pending||!data?.config.enabled} onClick={()=>void act(false)} className="underline disabled:opacity-50">Проверить</button></div>
+ {latest?<><p className="text-xs text-muted-foreground">Последний успешный замер: {new Date(latest.at).toLocaleString()}. {stale?'Показаны старые значения.':''}</p><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{metric('CPU · среднее между замерами',pct(latest.cpu),latest.cpu)}{metric('RAM · без доступного кеша',pct(latest.memory),latest.memory)}{metric('Диск /',pct(latest.disk),latest.disk)}{metric('Inode /',pct(latest.inode),latest.inode)}</div><div className="rounded-lg border border-border p-4 text-sm">Load average: {latest.load} · Uptime: {Math.floor(latest.uptime/86400)} д {Math.floor(latest.uptime%86400/3600)} ч</div>
+ {(latest.disk>=85||latest.inode>=85||latest.memory>=90)&&<p role="status" className="text-sm">Требует внимания: {latest.disk>=85?'диск / заполнен; ':''}{latest.inode>=85?'мало свободных inode; ':''}{latest.memory>=90?'высокое потребление памяти':''}</p>}
+ <section><h2 className="mb-2 text-sm font-medium">Последние замеры</h2><div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr><th className="p-2">Время</th><th>CPU</th><th>RAM</th><th>Диск /</th></tr></thead><tbody>{data?.samples.slice(-12).reverse().map(s=><tr key={s.at} className="border-t border-border"><td className="p-2">{new Date(s.at).toLocaleString()}</td><td>{pct(s.cpu)}</td><td>{pct(s.memory)}</td><td>{pct(s.disk)}</td></tr>)}</tbody></table></div></section></>:<p className="text-sm text-muted-foreground">Укажите SSH alias, включите мониторинг и сохраните. CPU появится со второго замера.</p>}
+ <footer className="text-xs text-muted-foreground">Храним до 288 замеров в BB. Кнопка «Проверить» соблюдает выбранный интервал. Сбор останавливается вместе с BB. Логи и процессы не сканируются; команды изменения сервера отсутствуют.</footer>
+ </main></div>;
+}
+export default definePluginApp(app=>{app.slots.navPanel({id:'overview',title:'VPS Watch',icon:'Server',path:'overview',component:Page});});

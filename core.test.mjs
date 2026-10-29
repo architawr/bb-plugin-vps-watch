@@ -1,0 +1,9 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {parse,collect} from './core.ts';
+const raw=(cpu='100 0 100 800 0 0 0 0 900 0',up=100)=>`STAT\ncpu ${cpu}\nMEM\nMemTotal: 1000 kB\nMemAvailable: 400 kB\nUP\n${up} 40\nLOAD\n0.01 0.02 0.03 1/80 123\nDISK\nFilesystem 1024-blocks Used Available Capacity Mounted on\n/dev/vda1 1000 500 500 50% /\nINODE\nFilesystem Inodes IUsed IFree IUse% Mounted on\n/dev/vda1 1000 100 900 10% /\n`;
+test('parse RAM, root disk, inode and unknown initial CPU; guest ticks excluded',()=>{const s=parse(raw());assert.equal(s.cpu,null);assert.equal(s.memory,60);assert.equal(s.disk,50);assert.equal(s.inode,10);assert.equal(s.total,1000);assert.equal(s.load,'0.01 0.02 0.03');});
+test('CPU calculated from tick deltas including iowait as idle',()=>{const a=parse(raw());const b=parse(raw('130 0 120 840 10 0 0 0 900 0',200),a);assert.equal(b.cpu,50);});
+test('reboot resets CPU baseline',()=>assert.equal(parse(raw('30 0 20 50 0 0 0 0',1),parse(raw())).cpu,null));
+test('malformed data rejected',()=>{assert.throws(()=>parse(''));assert.throws(()=>parse(raw().replace('MemAvailable: 400 kB','')));assert.throws(()=>parse(raw().replace('50%','bad')));});
+test('SSH option and command injection rejected before process start',()=>{for(const host of ['-oProxyCommand=bad','host;bad','host\nbad','a b'])assert.throws(()=>collect(host,new AbortController().signal));});

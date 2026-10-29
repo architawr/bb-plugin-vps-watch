@@ -16,7 +16,7 @@ export function parse(raw: string, previous?: Sample): Sample {
   const delta=previous && uptime>=previous.uptime ? total-previous.total : 0;
   return {memoryUsed:(mem.MemTotal-mem.MemAvailable)*1024,memoryTotal:mem.MemTotal*1024,diskUsed:disk.used*1024,diskTotal:disk.total*1024,diskAvailable:disk.available*1024,inodeUsed:inode.used,inodeTotal:inode.total,cores,at:Date.now(),cpu:delta>0 && previous ? Math.max(0,Math.min(100,100*(1-(idle-previous.idle)/delta))) : null,memory:100*(1-mem.MemAvailable/mem.MemTotal),disk:percent('DISK','INODE'),inode:percent('INODE'),uptime,load:section('LOAD','DISK').split(/\s+/).slice(0,3).join(' '),total,idle};
 }
-export function collect(host: string, signal: AbortSignal): Promise<string> {
+export function collect(host: string, signal: AbortSignal, command=COMMAND): Promise<string> {
   if(!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(host)) throw new Error('Укажите SSH alias: буквы, цифры, точка, дефис или подчёркивание');
-  return new Promise((resolve,reject)=>execFile('ssh',['-T','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=8','-o','ConnectionAttempts=1','-o','ServerAliveInterval=5','-o','ServerAliveCountMax=1',host,COMMAND],{timeout:15000,maxBuffer:32768,signal},(error,stdout)=>error?reject(new Error('SSH: '+error.message.slice(0,400))):resolve(stdout)));
+  return new Promise((resolve,reject)=>execFile('ssh',['-T','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=8','-o','ConnectionAttempts=1','-o','ServerAliveInterval=5','-o','ServerAliveCountMax=1',host,command],{timeout:15000,maxBuffer:524288,signal},(error,stdout)=>error?reject(new Error('SSH: '+error.message.slice(0,400))):resolve(stdout)));
 }

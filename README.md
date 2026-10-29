@@ -9,3 +9,11 @@ Stores up to 288 successful samples locally (24h at 5 minutes). Manual refresh i
 CLI: `bb vps-watch status` reads cached status only.
 
 Dashboard follows Burn’s compact KPI layout. Absolute RAM and root disk capacities use GiB/MiB (binary units); inode counts are exact. CPU vCPU is usage percent multiplied by logical CPU count, not a count of processes. Old samples keep their percentages and show unknown absolutes until the next measurement. Disk percent follows df semantics (including reserved blocks), so used / total may differ from the displayed df percentage.
+
+## Optional existing-history source
+
+Settings → VPS Watch Lite → Source → History reads `/var/log/vps-history` without invoking Docker or taking another sample. The optional collector and systemd unit examples live in `collector/`. Installation on a VPS is explicit and requires root; the plugin never installs or upgrades it automatically. Keep the reader and collector schema compatible. The reader imports at most 288 complete records from the last two daily files. Older records missing capacities are retained on the VPS and skipped on import.
+
+The collector uses Python 3, Docker, ps and Linux /proc. It writes once every five minutes, retains at most 8 daily files and caps each file at 4 MiB (32 MiB total). A full daily file is reduced to its latest ~2 MiB before appending. Records over 64 KiB are rejected. BB shows the measured history size and limit; no recursive disk scans are used. Storage budgets exclude the existing system journal. Backup policy and application logs are managed independently.
+
+Tests: `node --experimental-strip-types --test core.test.mjs server.test.mjs` and `python3 -m unittest discover -s collector -p 'test_*.py'`.

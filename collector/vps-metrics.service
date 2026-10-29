@@ -1,0 +1,8 @@
+[Unit]
+Description=VPS resource history
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vps-metrics
+Nice=10
+UMask=0077
+TimeoutStartSec=45
